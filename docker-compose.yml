@@ -1,0 +1,150 @@
+services:
+    # *******************************************************************
+    # This AWESEOME PIA wireguard VPN is created and maintained by thrnz
+    # For details on this container, and the available options
+    # be sure to check out: https://github.com/thrnz/docker-wireguard-pia
+    # *******************************************************************
+    vpn:
+        image: thrnz/docker-wireguard-pia:latest
+        container_name: pia-vpn
+        volumes:
+            - "${PIA_AUTH_TOKEN_VOLUME}:/pia"
+            - "${PIA_PORT_NUMBER_VOLUME}:/pia-shared"
+        cap_add:
+            - NET_ADMIN
+            - SYS_MODULE
+        environment:
+            # The following env vars are required:
+            - LOC=${PIA_LOC}
+            - USER=${PIA_USERNAME}
+            - PASS=${PIA_PASSWORD}
+            # The rest are optional:
+            - LOCAL_NETWORK=${LOCAL_NETWORK}
+            - KEEPALIVE=${KEEPALIVE}
+            - PORT_FORWARDING=${PORT_FORWARDING}
+        sysctls:
+            - net.ipv4.conf.all.src_valid_mark=1
+            # May as well disable ipv6. Should be blocked anyway.
+            - net.ipv6.conf.default.disable_ipv6=1
+            - net.ipv6.conf.all.disable_ipv6=1
+            - net.ipv6.conf.lo.disable_ipv6=1
+        # Since other services will use this network, we need to open the port for qbittorrent
+        ports:
+            - ${QBT_WEB_PORT}:8080
+            - ${PROWLARR_WEB_PORT}:9696
+            - ${SONARR_WEB_PORT}:8989
+            - ${RADARR_WEB_PORT}:7878
+        # The container has no recovery logic. Use a healthcheck to catch disconnects.
+        healthcheck:
+            test: ping -c 1 www.google.com || exit 1
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+    qbittorrent:
+        image: lscr.io/linuxserver/qbittorrent:latest
+        container_name: qbittorrent
+        environment:
+            - PUID=${PUID}
+            - PGID=${GUID}
+            - TZ=${TIMEZONE}
+            - WEBUI_PORT=${QBT_WEB_PORT}
+        volumes:
+            - ${QBT_CONFIG_VOLUME}:/config
+            - ${QBT_DOWNLOADS_VOLUME}:/downloads
+        network_mode: "service:vpn"
+        restart: unless-stopped
+        depends_on:
+            - vpn
+
+    # *******************************************************************
+    # qbittorrent-port-helper 
+    #    Looks for a file named "port.dat", reads the port number in that
+    #    file and uses that to update the Listening Port number used by
+    #    qBittorrent.
+    #
+    # See https://github.com/tyzen9/docker-qbittorrent-port-helper for
+    # configuration details
+    # *******************************************************************
+    port-helper:
+        image: tyzen9/qbittorrent-port-helper:latest
+        container_name: port-helper
+        volumes:
+            - ${PIA_PORT_NUMBER_VOLUME}:/pia-shared
+        environment:
+            - QBITTORRENT_USERNAME=${QBT_USERNAME}
+            - QBITTORRENT_PASSWORD=${QBT_PASSWORD}
+            - QBITTORRENT_PORT_NUMBER=${QBT_WEB_PORT}
+            - QBITTORRENT_URL=http://localhost
+        network_mode: "service:vpn"
+        depends_on:
+            - qbittorrent
+
+    # *******************************************************************
+    # Stripparr 
+    #    is used to remove unwanted metadata from downloaded media, and
+    #    is created and maintained by Mike Nye and other contributors
+    #
+    # See https://github.com/mikenye/docker-striparr for details
+    # explaining how to configure it for use with Sonarr/Radarr
+    # *******************************************************************
+    striparr:
+        image: mikenye/striparr:latest
+        container_name: striparr
+        environment:
+            - PUID=${PUID}
+            - PGID=${GUID}
+            - TZ=${TIMEZONE}
+        volumes:
+            - ${MOVIE_VOLUME}:/movies
+            - ${TV_VOLUME}:/tv
+        restart: unless-stopped
+        network_mode: "service:vpn"
+
+    prowlarr:
+        image: lscr.io/linuxserver/prowlarr:latest
+        container_name: prowlarr
+        environment:
+            - PUID=${PUID}
+            - PGID=${GUID}
+            - TZ=${TIMEZONE}
+        volumes:
+            - ${PROWLARR_CONFIG_VOLUME}:/config
+        network_mode: "service:vpn"
+        restart: unless-stopped
+        depends_on:
+            - vpn
+
+    sonarr:
+        image: lscr.io/linuxserver/sonarr:latest
+        container_name: sonarr
+        environment:
+            - PUID=${PUID}
+            - PGID=${GUID}
+            - TZ=${TIMEZONE}
+        volumes:
+            - ${SONARR_CONFIG_VOLUME}:/config
+            - ${TV_VOLUME}:/tv
+            - ${QBT_DOWNLOADS_VOLUME}:/downloads
+        network_mode: "service:vpn"
+        restart: unless-stopped
+        depends_on:
+            - vpn
+            - prowlarr
+
+    radarr:
+        image: lscr.io/linuxserver/radarr:latest
+        container_name: radarr
+        environment:
+            - PUID=${PUID}
+            - PGID=${GUID}
+            - TZ=${TIMEZONE}
+        volumes:
+            - ${RADARR_CONFIG_VOLUME}:/config
+            - ${MOVIE_VOLUME}:/movies
+            - ${QBT_DOWNLOADS_VOLUME}:/downloads
+        network_mode: "service:vpn"
+        restart: unless-stopped
+        depends_on:
+            - vpn
+            - prowlarr
