@@ -101,8 +101,8 @@ services:
             - PGID=${GUID:-1000}
             - TZ=${TZ_ID}
         volumes:
-            - movies:/movies
-            - tv-shows:/tv
+            - ${MOVIE_VOLUME}:/movies
+            - ${TV_VOLUME}:/tv
         restart: unless-stopped
         network_mode: "service:vpn"
 
