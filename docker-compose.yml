@@ -141,7 +141,7 @@ services:
             - TZ=${TZ_ID}
         volumes:
             - sonarr-config:/config
-            - tv-shows:/tv
+            - ${TV_VOLUME}:/tv
             - downloads:/downloads
         network_mode: "service:vpn"
         restart: unless-stopped
@@ -158,7 +158,7 @@ services:
             - TZ=${TZ_ID}
         volumes:
             - radarr-config:/config
-            - movies:/movies
+            - ${MOVIE_VOLUME}:/movies
             - downloads:/downloads
         network_mode: "service:vpn"
         restart: unless-stopped
@@ -176,7 +176,7 @@ services:
             - TZ=${TZ_ID}
         volumes:
             - readarr-config:/config
-            - books:/books
+            - ${BOOKS_VOLUME}:/books
             - downloads:/downloads
         network_mode: "service:vpn"
         restart: unless-stopped
@@ -191,8 +191,4 @@ volumes:
     readarr-config:
     radarr-config:
     sonarr-config:
-    books:
     downloads:
-    movies:
-    tv-shows:
-
