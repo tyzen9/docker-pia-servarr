@@ -1,3 +1,5 @@
+name: servarr
+
 services:
     # *******************************************************************
     # This AWESEOME PIA wireguard VPN is created and maintained by thrnz
@@ -8,8 +10,8 @@ services:
         image: thrnz/docker-wireguard-pia:latest
         container_name: pia-vpn
         volumes:
-            - "${PIA_AUTH_TOKEN_VOLUME}:/pia"
-            - "${PIA_PORT_NUMBER_VOLUME}:/pia-shared"
+            - pia-token:/pia
+            - pia-portnumber:/pia-shared
         cap_add:
             - NET_ADMIN
             - SYS_MODULE
@@ -20,8 +22,8 @@ services:
             - PASS=${PIA_PASSWORD}
             # The rest are optional:
             - LOCAL_NETWORK=${LOCAL_NETWORK}
-            - KEEPALIVE=${KEEPALIVE}
-            - PORT_FORWARDING=${PORT_FORWARDING}
+            - KEEPALIVE=${KEEPALIVE:-25}
+            - PORT_FORWARDING=${PORT_FORWARDING:-1}
         sysctls:
             - net.ipv4.conf.all.src_valid_mark=1
             # May as well disable ipv6. Should be blocked anyway.
@@ -30,10 +32,13 @@ services:
             - net.ipv6.conf.lo.disable_ipv6=1
         # Since other services will use this network, we need to open the port for qbittorrent
         ports:
-            - ${QBT_WEB_PORT}:8080
-            - ${PROWLARR_WEB_PORT}:9696
-            - ${SONARR_WEB_PORT}:8989
-            - ${RADARR_WEB_PORT}:7878
+            - ${QBT_WEB_PORT:-8080}:8080
+            - ${PROWLARR_WEB_PORT:-9696}:9696
+            - ${SONARR_WEB_PORT:-8989}:8989
+            - ${RADARR_WEB_PORT:-7878}:7878
+            - ${READARR_WEB_PORT:-8787}:8787
+            - "${FLARESOLVER_WEB_PORT:-8191}:8191"
+
         # The container has no recovery logic. Use a healthcheck to catch disconnects.
         healthcheck:
             test: ping -c 1 www.google.com || exit 1
@@ -45,13 +50,13 @@ services:
         image: lscr.io/linuxserver/qbittorrent:latest
         container_name: qbittorrent
         environment:
-            - PUID=${PUID}
-            - PGID=${GUID}
-            - TZ=${TIMEZONE}
-            - WEBUI_PORT=${QBT_WEB_PORT}
+            - PUID=${PUID:-1000}
+            - PGID=${GUID:-1000}
+            - TZ=${TZ_ID}
+            - WEBUI_PORT=${QBT_WEB_PORT:-8080}
         volumes:
-            - ${QBT_CONFIG_VOLUME}:/config
-            - ${QBT_DOWNLOADS_VOLUME}:/downloads
+            - qbittorrent-config:/config
+            - downloads:/downloads
         network_mode: "service:vpn"
         restart: unless-stopped
         depends_on:
@@ -70,11 +75,11 @@ services:
         image: tyzen9/qbittorrent-port-helper:latest
         container_name: port-helper
         volumes:
-            - ${PIA_PORT_NUMBER_VOLUME}:/pia-shared
+            - pia-portnumber:/pia-shared
         environment:
             - QBITTORRENT_USERNAME=${QBT_USERNAME}
             - QBITTORRENT_PASSWORD=${QBT_PASSWORD}
-            - QBITTORRENT_PORT_NUMBER=${QBT_WEB_PORT}
+            - QBITTORRENT_PORT_NUMBER=${QBT_WEB_PORT:-8080}
             - QBITTORRENT_URL=http://localhost
         network_mode: "service:vpn"
         depends_on:
@@ -92,12 +97,24 @@ services:
         image: mikenye/striparr:latest
         container_name: striparr
         environment:
-            - PUID=${PUID}
-            - PGID=${GUID}
-            - TZ=${TIMEZONE}
+            - PUID=${PUID:-1000}
+            - PGID=${GUID:-1000}
+            - TZ=${TZ_ID}
         volumes:
-            - ${MOVIE_VOLUME}:/movies
-            - ${TV_VOLUME}:/tv
+            - movies:/movies
+            - tv-shows:/tv
+        restart: unless-stopped
+        network_mode: "service:vpn"
+
+    flaresolverr:
+        # DockerHub mirror flaresolverr/flaresolverr:latest
+        image: ghcr.io/flaresolverr/flaresolverr:latest
+        container_name: flaresolverr
+        environment:
+            - LOG_LEVEL=${LOG_LEVEL:-info}
+            - LOG_HTML=${LOG_HTML:-false}
+            - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+            - TZ=${TZ_ID}
         restart: unless-stopped
         network_mode: "service:vpn"
 
@@ -105,11 +122,11 @@ services:
         image: lscr.io/linuxserver/prowlarr:latest
         container_name: prowlarr
         environment:
-            - PUID=${PUID}
-            - PGID=${GUID}
-            - TZ=${TIMEZONE}
+            - PUID=${PUID:-1000}
+            - PGID=${GUID:-1000}
+            - TZ=${TZ_ID}
         volumes:
-            - ${PROWLARR_CONFIG_VOLUME}:/config
+            - prowlarr-config:/config
         network_mode: "service:vpn"
         restart: unless-stopped
         depends_on:
@@ -119,13 +136,13 @@ services:
         image: lscr.io/linuxserver/sonarr:latest
         container_name: sonarr
         environment:
-            - PUID=${PUID}
-            - PGID=${GUID}
-            - TZ=${TIMEZONE}
+            - PUID=${PUID:-1000}
+            - PGID=${GUID:-1000}
+            - TZ=${TZ_ID}
         volumes:
-            - ${SONARR_CONFIG_VOLUME}:/config
-            - ${TV_VOLUME}:/tv
-            - ${QBT_DOWNLOADS_VOLUME}:/downloads
+            - sonarr-config:/config
+            - tv-shows:/tv
+            - downloads:/downloads
         network_mode: "service:vpn"
         restart: unless-stopped
         depends_on:
@@ -136,15 +153,46 @@ services:
         image: lscr.io/linuxserver/radarr:latest
         container_name: radarr
         environment:
-            - PUID=${PUID}
-            - PGID=${GUID}
-            - TZ=${TIMEZONE}
+            - PUID=${PUID:-1000}
+            - PGID=${GUID:-1000}
+            - TZ=${TZ_ID}
         volumes:
-            - ${RADARR_CONFIG_VOLUME}:/config
-            - ${MOVIE_VOLUME}:/movies
-            - ${QBT_DOWNLOADS_VOLUME}:/downloads
+            - radarr-config:/config
+            - movies:/movies
+            - downloads:/downloads
         network_mode: "service:vpn"
         restart: unless-stopped
         depends_on:
             - vpn
             - prowlarr
+
+    readarr:
+        # Readarr is currently releasing from their "develop" branch
+        image: lscr.io/linuxserver/readarr:develop
+        container_name: readarr
+        environment:
+            - PUID=${PUID:-1000}
+            - PGID=${GUID:-1000}
+            - TZ=${TZ_ID}
+        volumes:
+            - readarr-config:/config
+            - books:/books
+            - downloads:/downloads
+        network_mode: "service:vpn"
+        restart: unless-stopped
+        depends_on:
+            - vpn
+
+volumes:
+    pia-token:
+    pia-portnumber:
+    qbittorrent-config:
+    prowlarr-config:
+    readarr-config:
+    radarr-config:
+    sonarr-config:
+    books:
+    downloads:
+    movies:
+    tv-shows:
+
