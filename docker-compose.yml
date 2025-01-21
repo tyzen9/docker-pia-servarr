@@ -181,9 +181,9 @@ services:
     # See https://github.com/tyzen9/docker-qbittorrent-port-helper for
     # configuration details
     # ************************************************************************
-    port-helper:
+    qbittorrent-port-helper:
         image: tyzen9/qbittorrent-port-helper:latest
-        container_name: port-helper
+        container_name: qbittorrent-port-helper
         volumes:
             - pia-portnumber:/pia-shared
         environment:
