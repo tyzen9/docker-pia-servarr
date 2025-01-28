@@ -73,7 +73,7 @@ services:
         depends_on:
             - vpn
             - prowlarr
-
+            
     # !~~~!~~~!!~~~!~~~!!~~~!~~~!!~~~!~~~!!~~~!~~~!!~~~!~~~!!~~~!~~~!!~~~!~~~!
     # 
     #                           ---- WARNING ----
@@ -156,6 +156,7 @@ services:
     # qbittorrent
     #    qBittorrent is based on the Qt toolkit and libtorrent-rasterbar 
     #    library.
+    # See https://docs.linuxserver.io/images/docker-qbittorrent/
     # ************************************************************************
     qbittorrent:
         image: lscr.io/linuxserver/qbittorrent:latest
@@ -240,6 +241,28 @@ services:
             - TZ=${TZ_ID}
         network_mode: "service:vpn"
 
+    # ************************************************************************
+    # mam-ip-helper (Steve Theisen)
+    #
+    #    This is a simple container that pings myanonamouse.net once an hour
+    #    to update the VPN ipaddress being used for downloading. This is 
+    #    important to keep connectivity for seeding ratios etc.  If you do
+    #    not use myanonamouse.net, you can comment this service out, or just
+    #    neglect to provide a MAM_ID in the environment, and the container 
+    #    will simply exit
+    #
+    # See https://github.com/tyzen9/docker-myanonamouse-ip-helper for
+    # configuration details
+    # ************************************************************************
+    mam-ip-helper:
+        image: tyzen9/myanonamouse-ip-helper:latest
+        container_name: mam-ip-helper
+        environment:
+            - MAM_ID=${MAM_ID}
+        network_mode: "service:vpn"
+        depends_on:
+            - vpn
+    
 
 volumes:
     pia-token:
